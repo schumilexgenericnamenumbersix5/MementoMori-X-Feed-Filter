@@ -7,21 +7,18 @@ def run_filter():
     rss_url = "https://rss.app/feeds/gNSWbxS89cf9JqaP.xml"
     webhook_url = os.getenv("DISCORD_WEBHOOK")
     
-    # --- EN/JP KEYWORD PATTERNS ---
-    # Targets: New Witches, Laments, Maintenance, and specialized Gacha banners
+    # --- REFINED EN/JP KEYWORD PATTERNS ---
+    # Targets: New Witches, Laments, CV reveals, and Game Updates
     WANT_KEYWORDS = [
-        # Character & Music
         "新キャラ", "登場", "実装", "ラメント", "lament", "cv", "song by",
-        # Updates & Events
         "予告", "メンテ", "アップデート", "開催", "復刻", "update", "maintenance",
-        # Gacha/Specifics
-        "運命ガチャ", "ピックアップ", "布告", "告知"
+        "運命ガチャ", "ピックアップ", "布告", "告知", "美少女"
     ] 
 
-    # Targets: Daily RT campaigns and generic marketing fluff
+    # Strictly filters out the daily repetitive marketing spam
     IGNORE_KEYWORDS = [
         "キャンペーン", "プレゼント", "抽選", "リツイート", "フォロー", 
-        "giveaway", "retweet", "campaign", "thank you", "記念"
+        "giveaway", "retweet", "campaign", "thank you", "記念", "amazonギフト"
     ]
 
     print("Fetching RSS feed from RSS.app...")
@@ -35,38 +32,39 @@ def run_filter():
         response = requests.get(rss_url, headers=headers)
         response.raise_for_status()
         
-        # Using 'html.parser' instead of 'xml' to avoid the missing library error
-        # while still correctly pulling the XML tags from the RSS feed.
+        # Parse RSS items
         soup = BeautifulSoup(response.content, 'html.parser')
         items = soup.find_all('item')
         print(f"Total items found in feed: {len(items)}")
 
         matches_found = 0
         for item in items:
-            # RSS tags are case-insensitive in html.parser
             title = item.find('title').text if item.find('title') else ""
             description = item.find('description').text if item.find('description') else ""
+            # RSS.app links usually point directly to the tweet
             link = item.find('link').text if item.find('link') else ""
             
             full_text = (title + " " + description).lower()
 
-            # 1. Skip ignored junk
+            # 1. Skip ignored marketing junk
             if any(word.lower() in full_text for word in IGNORE_KEYWORDS):
                 continue
 
-            # 2. Match wanted content
+            # 2. Match high-value content
             if any(word.lower() in full_text for word in WANT_KEYWORDS):
                 matches_found += 1
                 print(f"Match Found: {title[:50]}...")
                 
+                # --- THE IDEAL FORMAT FIX ---
+                # To get the large image preview like the Kepler tweet:
+                # We send the link OUTSIDE of an embed. Discord will then scrape the 
+                # Twitter/X metadata and generate the large card automatically.
+                message_content = f"🔔 **MementoMori Update Found!**\n\n{title}\n\n{link}"
+                
                 payload = {
-                    "username": "MementoMori Official Tracker",
-                    "embeds": [{
-                        "title": title[:256],
-                        "description": description[:1000],
-                        "url": link,
-                        "color": 3066993 # MementoMori themed color
-                    }]
+                    "username": "MementoMori Official",
+                    "avatar_url": "https://mementomori.jp/favicon.ico",
+                    "content": message_content
                 }
                 
                 requests.post(webhook_url, json=payload)
