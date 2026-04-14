@@ -8,12 +8,13 @@ jobs:
   run-filter:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6 # Native Node 24 support
+      # Upgrading to v6 is the correct fix for Node 24 compatibility
+      - uses: actions/checkout@v6
       
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      # Upgrading to v6 removes the setup-python deprecation warning
+      - uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.12'
           
       - name: Install Dependencies
         run: pip install requests feedparser
