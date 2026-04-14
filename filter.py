@@ -55,7 +55,7 @@ def run_filter():
 
         # Time window: 24 hours ago from now
         now = datetime.now(timezone.utc)
-        time_threshold = now - timedelta(hours=24)
+        time_threshold = now - timedelta(hours=64)
 
         for item in reversed(items):
             # Check the date
