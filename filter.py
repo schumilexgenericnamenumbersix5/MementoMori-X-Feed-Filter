@@ -7,7 +7,7 @@ from email.utils import parsedate_to_datetime
 
 def clean_text(text):
     # Strips XML/CDATA tags for internal keyword matching
-    text = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', text, flags=re.py.DOTALL)
+    text = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', text, flags=re.DOTALL)
     return text.strip()
 
 def run_filter():
@@ -50,6 +50,7 @@ def run_filter():
         items = soup.find_all('item')
 
         if not items:
+            print("No items found in feed.")
             return
 
         # Time window: 24 hours ago from now
@@ -57,7 +58,7 @@ def run_filter():
         time_threshold = now - timedelta(hours=24)
 
         for item in reversed(items):
-            # Check the date first
+            # Check the date
             pub_date_str = item.find('pubDate').text if item.find('pubDate') else None
             if not pub_date_str:
                 continue
@@ -84,6 +85,7 @@ def run_filter():
 
             # Check for Want list
             if any(word.lower() in full_content for word in WANT_KEYWORDS):
+                # Robust link replacement for vxtwitter
                 if "x.com" in link:
                     clean_link = link.replace("x.com", "vxtwitter.com")
                 elif "twitter.com" in link:
