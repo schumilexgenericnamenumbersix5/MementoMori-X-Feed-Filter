@@ -1,77 +1,92 @@
 import os
 import requests
 from bs4 import BeautifulSoup
+import re
+
+def get_last_id(gist_id, token):
+    url = f"https://api.github.com/gists/{gist_id}"
+    headers = {"Authorization": f"token {token}"}
+    res = requests.get(url, headers=headers)
+    if res.status_code == 200:
+        # Pulls the saved ID from your Gist
+        return res.json()['files']['last_id.txt']['content'].strip()
+    return "0"
+
+def update_last_id(gist_id, token, new_id):
+    url = f"https://api.github.com/gists/{gist_id}"
+    headers = {"Authorization": f"token {token}"}
+    data = {"files": {"last_id.txt": {"content": str(new_id)}}}
+    requests.patch(url, headers=headers, json=data)
 
 def run_filter():
-    # --- CONFIGURATION ---
     rss_url = "https://rss.app/feeds/gNSWbxS89cf9JqaP.xml"
     webhook_url = os.getenv("DISCORD_WEBHOOK")
+    gist_id = os.getenv("GIST_ID")
+    gist_token = os.getenv("GIST_TOKEN")
     
-    # --- REFINED KEYWORDS ---
+    # Updated patterns for MementoMori JP feed
     WANT_KEYWORDS = [
-        "新キャラ", "登場", "実装", "ラメント", "lament", "cv", "song by",
-        "予告", "メンテ", "アップデート", "開催", "復刻", "update", "maintenance",
-        "運命ガチャ", "ピックアップ", "布告", "告知"
+        "新キャラ", "登場", "実装", "ラメント", "lament", "cv", "song by", 
+        "予告", "メンテ", "アップデート", "開催", "復刻", "運命ガチャ", "ピックアップ"
     ] 
-
     IGNORE_KEYWORDS = [
-        "キャンペーン", "プレゼント", "抽選", "リツイート", "フォロー", 
-        "giveaway", "retweet", "campaign", "thank you", "記念", "amazonギフト"
+        "キャンペーン", "プレゼント", "抽選", "リツイート", "フォロー", "amazonギフト", "記念"
     ]
 
-    if not webhook_url:
-        print("CRITICAL ERROR: DISCORD_WEBHOOK is not set.")
+    if not all([webhook_url, gist_id, gist_token]):
+        print("Error: Missing GIST_ID or GIST_TOKEN in GitHub Secrets.")
         return
 
     try:
+        last_sent_id = get_last_id(gist_id, gist_token)
+        print(f"Last processed ID: {last_sent_id}")
+
         response = requests.get(rss_url, headers={'User-Agent': 'Mozilla/5.0'})
-        response.raise_for_status()
-        
         soup = BeautifulSoup(response.content, 'html.parser')
         items = soup.find_all('item')
 
         if not items:
-            print("No items found.")
             return
 
-        print(f"Checking {len(items)} items for matches...")
-
-        # We check the 5 most recent tweets
-        for item in items[:5]:
+        newest_id = last_sent_id
+        
+        # Process items oldest to newest
+        for item in reversed(items[:15]):
             title = item.find('title').text if item.find('title') else ""
             link = item.find('link').text if item.find('link') else ""
             
-            # 1. Force the link to be a clean X/Twitter link for fxtwitter to work
-            # This strips RSS.app tracking and forces the preview
-            if "rss.app" in link:
-                # Often the real link is in the guid or can be cleaned
-                # If RSS.app is masking it, we try to keep it as is but fix the domain
-                clean_link = link.replace("x.com", "fxtwitter.com").replace("twitter.com", "fxtwitter.com")
-            else:
-                clean_link = link.replace("x.com", "fxtwitter.com").replace("twitter.com", "fxtwitter.com")
-            
-            full_text = title.lower()
+            # Extract the actual Tweet ID from the URL
+            match = re.search(r'status/(\d+)', link)
+            current_id = match.group(1) if match else "0"
 
-            # 2. Skip marketing spam
+            # Skip if we already sent this one
+            if current_id <= last_sent_id:
+                continue
+
+            # Filtering logic
+            full_text = title.lower()
             if any(word.lower() in full_text for word in IGNORE_KEYWORDS):
                 continue
 
-            # 3. Match and Send
             if any(word.lower() in full_text for word in WANT_KEYWORDS):
-                # We send the title and the clean link separately to force Discord to embed it
-                message = f"**{title}**\n{clean_link}"
+                # vxtwitter ensures the BIG Kepler-style image card shows up
+                clean_link = link.replace("x.com", "vxtwitter.com").replace("twitter.com", "vxtwitter.com")
                 
                 payload = {
                     "username": "MementoMori Official",
                     "avatar_url": "https://mementomori.jp/favicon.ico",
-                    "content": message
+                    "content": f"**{title}**\n{clean_link}"
                 }
                 
                 res = requests.post(webhook_url, json=payload)
                 if res.status_code in [200, 204]:
-                    print(f"Sent match: {title[:30]}")
-                else:
-                    print(f"Discord error: {res.status_code}")
+                    newest_id = current_id
+                    print(f"Successfully posted: {current_id}")
+
+        # Save the new ID so we don't dupe next time
+        if newest_id != last_sent_id:
+            update_last_id(gist_id, gist_token, newest_id)
+            print(f"Updated Gist memory to: {newest_id}")
 
     except Exception as e:
         print(f"Error: {e}")
