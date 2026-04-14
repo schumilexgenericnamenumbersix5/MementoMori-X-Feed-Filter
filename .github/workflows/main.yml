@@ -4,6 +4,7 @@ on:
     - cron: '0 0,12 * * *'
   workflow_dispatch:
 
+# This handles the Node 24 requirement
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -11,10 +12,12 @@ jobs:
   run-filter:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1.0.0
+      - uses: actions/checkout@v4
       
       - name: Set up Python
-        uses: actions/setup-python@v1.0.0
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
           
       - name: Install Dependencies
         run: pip install requests feedparser
