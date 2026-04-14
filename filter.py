@@ -4,73 +4,75 @@ from bs4 import BeautifulSoup
 
 def run_filter():
     # --- CONFIGURATION ---
-    username = "mementomori_boi"
+    rss_url = "https://rss.app/feeds/gNSWbxS89cf9JqaP.xml"
     webhook_url = os.getenv("DISCORD_WEBHOOK")
     
-    # ADD YOUR KEYWORDS HERE (Case-insensitive)
-    WANT_KEYWORDS = ["memento", "update", "new"] 
-    IGNORE_KEYWORDS = ["giveaway", "ad", "promo"]
+    # --- JAPANESE & ENGLISH FILTER PATTERNS ---
+    # These match new character releases, maintenance, and event news.
+    WANT_KEYWORDS = [
+        # English
+        "new", "update", "character", "release", "maintenance", "event", "fixed", "collab",
+        # Japanese
+        "新キャラ", "登場", "予告", "実装", "メンテ", "アップデート", "開催", "不具合", "復刻"
+    ] 
 
-    # Target URL (X Syndication is more stable for scraping)
-    url = f"https://syndication.twitter.com/srv/timeline-profile/screen-name/{username}"
-    
-    print(f"Scraping @{username}...")
+    # These hide generic marketing fluff and repeat automated posts.
+    IGNORE_KEYWORDS = [
+        # English
+        "thank you", "follow", "share", "campaign", "giveaway", "repost",
+        # Japanese
+        "ありがとう", "フォロー", "キャンペーン", "プレゼント", "リツイート", "引用", "抽選"
+    ]
+
+    print(f"Fetching RSS feed from RSS.app...")
 
     if not webhook_url:
-        print("CRITICAL ERROR: DISCORD_WEBHOOK is not set in GitHub Secrets.")
+        print("CRITICAL ERROR: DISCORD_WEBHOOK is not set.")
         return
 
-    # Browser-like headers to avoid being blocked by X
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
-    }
-    
     try:
-        response = requests.get(url, headers=headers)
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        response = requests.get(rss_url, headers=headers)
         response.raise_for_status()
         
-        soup = BeautifulSoup(response.text, 'html.parser')
-        tweets = soup.find_all(class_='timeline-Tweet')
-        print(f"Found {len(tweets)} tweets in the feed.")
+        soup = BeautifulSoup(response.content, features="xml")
+        items = soup.find_all('item')
+        print(f"Total items in feed: {len(items)}")
 
-        if not tweets:
-            print("No tweets found. X might be rate-limiting the runner.")
-            return
+        matches_found = 0
+        for item in items:
+            title = item.find('title').text if item.find('title') else ""
+            description = item.find('description').text if item.find('description') else ""
+            link = item.find('link').text if item.find('link') else "No link"
+            
+            # Combine all text into one searchable string
+            full_text = (title + " " + description).lower()
 
-        for tweet in tweets:
-            # 1. Extract tweet text and link
-            text_element = tweet.find(class_='timeline-Tweet-text')
-            if not text_element:
-                continue
-                
-            content = text_element.get_text().lower()
-            link_element = tweet.find('a', class_='timeline-Tweet-timestamp')
-            link = link_element['href'] if link_element else "No link found"
-
-            # 2. Apply IGNORE Filter
-            if any(word.lower() in content for word in IGNORE_KEYWORDS):
-                print(f"Skipping tweet (Contains Ignored Word): {content[:50]}...")
+            # 1. Check for IGNORE words first (to skip junk)
+            if any(word.lower() in full_text for word in IGNORE_KEYWORDS):
                 continue
 
-            # 3. Apply WANT Filter
-            if any(word.lower() in content for word in WANT_KEYWORDS):
-                print(f"Match Found: {content[:50]}... Sending to Discord.")
+            # 2. Check for WANT words
+            if any(word.lower() in full_text for word in WANT_KEYWORDS):
+                matches_found += 1
+                print(f"Match Found: {title[:50]}...")
                 
                 payload = {
-                    "username": "X Filter Bot",
-                    "content": f"**Match Found for @{username}!**\n{text_element.get_text()}\n\n🔗 [View on X]({link})"
+                    "username": "MementoMori Official Tracker",
+                    "embeds": [{
+                        "title": title[:256],
+                        "description": description[:1000],
+                        "url": link,
+                        "color": 3447003 # MementoMori Blue
+                    }]
                 }
                 
-                res = requests.post(webhook_url, json=payload)
-                if res.status_code in [200, 204]:
-                    print("Successfully sent to Discord.")
-                else:
-                    print(f"Discord error: {res.status_code}")
-            else:
-                print(f"No match found in tweet: {content[:50]}...")
+                requests.post(webhook_url, json=payload)
+        
+        print(f"Process complete. Sent {matches_found} new posts to Discord.")
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        print(f"Error: {e}")
 
 if __name__ == "__main__":
     run_filter()
