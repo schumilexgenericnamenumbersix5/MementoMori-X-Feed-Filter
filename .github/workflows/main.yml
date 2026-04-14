@@ -2,7 +2,7 @@ name: Run X Feed Filter
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 0 * * *' # Runs once a day at 00:00 UTC
   workflow_dispatch:
 
 jobs:
@@ -26,6 +26,4 @@ jobs:
       - name: Run Filter Script
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-          GIST_ID: ${{ secrets.GIST_ID }}
-          GIST_TOKEN: ${{ secrets.GIST_TOKEN }}
         run: python filter.py
