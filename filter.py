@@ -31,6 +31,7 @@ def run_filter():
     ]
 
     IGNORE_KEYWORDS = [
+        "ライブ" / "Live",
         "アップデート", "Update",
         "メンテ", "Maintenance",
         "プレゼント", "Present",
@@ -55,7 +56,7 @@ def run_filter():
 
         # Time window: 24 hours ago from now
         now = datetime.now(timezone.utc)
-        time_threshold = now - timedelta(hours=64)
+        time_threshold = now - timedelta(hours=24)
 
         for item in reversed(items):
             # Check the date
