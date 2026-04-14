@@ -5,6 +5,10 @@ on:
     - cron: '0 * * * *'
   workflow_dispatch:
 
+# 1. This forces all JavaScript actions to use Node 24, removing the warning.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   filter-job:
     runs-on: ubuntu-latest
@@ -21,10 +25,8 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # This installs the missing 'requests' module
-          pip install requests 
-          # If you use other libraries like 'tweepy' or 'beautifulsoup4', add them below:
-          # pip install tweepy
+          # 2. Added beautifulsoup4 alongside requests
+          pip install requests beautifulsoup4
 
       - name: Run Filter Script
         env:
