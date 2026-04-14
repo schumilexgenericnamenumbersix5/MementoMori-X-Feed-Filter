@@ -2,31 +2,17 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import re
-
-def get_last_id(gist_id, token):
-    url = f"https://api.github.com/gists/{gist_id}"
-    headers = {"Authorization": f"token {token}"}
-    res = requests.get(url, headers=headers)
-    if res.status_code == 200:
-        return res.json()['files']['last_id.txt']['content'].strip()
-    return "0"
-
-def update_last_id(gist_id, token, new_id):
-    url = f"https://api.github.com/gists/{gist_id}"
-    headers = {"Authorization": f"token {token}"}
-    data = {"files": {"last_id.txt": {"content": str(new_id)}}}
-    requests.patch(url, headers=headers, json=data)
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
 
 def clean_text(text):
     # Strips XML/CDATA tags for internal keyword matching
-    text = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', text, flags=re.DOTALL)
+    text = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', text, flags=re.py.DOTALL)
     return text.strip()
 
 def run_filter():
     rss_url = "https://rss.app/feeds/gNSWbxS89cf9JqaP.xml"
     webhook_url = os.getenv("DISCORD_WEBHOOK")
-    gist_id = os.getenv("GIST_ID")
-    gist_token = os.getenv("GIST_TOKEN")
     
     # Filter Keywords in Pairs (JP, EN)
     WANT_KEYWORDS = [
@@ -54,47 +40,50 @@ def run_filter():
         "amazonギフト", "Amazon Gift"
     ]
 
-    if not all([webhook_url, gist_id, gist_token]):
-        print("Error: Missing environment variables.")
+    if not webhook_url:
+        print("Error: Missing DISCORD_WEBHOOK.")
         return
 
     try:
-        last_sent_id = get_last_id(gist_id, gist_token)
         response = requests.get(rss_url, headers={'User-Agent': 'Mozilla/5.0'})
-        
-        # Proper XML parser to handle the feed correctly
         soup = BeautifulSoup(response.content, 'xml')
         items = soup.find_all('item')
 
         if not items:
             return
 
-        newest_processed_id = last_sent_id
-        
-        # Checking more items to ensure we don't miss the 3.5 Anni tweet if it's buried
-        for item in reversed(items[:20]):
+        # Time window: 24 hours ago from now
+        now = datetime.now(timezone.utc)
+        time_threshold = now - timedelta(hours=24)
+
+        for item in reversed(items):
+            # Check the date first
+            pub_date_str = item.find('pubDate').text if item.find('pubDate') else None
+            if not pub_date_str:
+                continue
+            
+            pub_date = parsedate_to_datetime(pub_date_str)
+            
+            # Only process posts from the last 24 hours
+            if pub_date < time_threshold:
+                continue
+
             title = clean_text(item.find('title').text if item.find('title') else "")
             description = clean_text(item.find('description').text if item.find('description') else "")
             link = item.find('link').text if item.find('link') else ""
-            
-            match = re.search(r'status/(\d+)', link)
-            current_id = match.group(1) if match else link
 
-            if current_id <= last_sent_id:
-                continue
-
-            # Skip Retweets to avoid "RT by @..." text blocks
+            # Skip Retweets
             if title.startswith("RT ") or "RT by @" in title:
                 continue
 
-            # Combine for keyword checking
             full_content = (title + " " + description).lower()
             
+            # Check for Ignore list
             if any(word.lower() in full_content for word in IGNORE_KEYWORDS):
                 continue
 
+            # Check for Want list
             if any(word.lower() in full_content for word in WANT_KEYWORDS):
-                # Robust link replacement for vxtwitter
                 if "x.com" in link:
                     clean_link = link.replace("x.com", "vxtwitter.com")
                 elif "twitter.com" in link:
@@ -102,7 +91,7 @@ def run_filter():
                 else:
                     clean_link = link
                 
-                # Payload: Drop ONLY the link as requested
+                # Payload: Drop ONLY the link
                 payload = {
                     "username": "MementoMori Official",
                     "content": clean_link
@@ -110,10 +99,7 @@ def run_filter():
                 
                 res = requests.post(webhook_url, json=payload)
                 if res.status_code in [200, 204]:
-                    newest_processed_id = current_id
-
-        if newest_processed_id != last_sent_id:
-            update_last_id(gist_id, gist_token, newest_processed_id)
+                    print(f"Posted: {clean_link}")
 
     except Exception as e:
         print(f"Error: {e}")
