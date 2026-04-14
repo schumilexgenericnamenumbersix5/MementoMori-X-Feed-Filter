@@ -1,27 +1,27 @@
 name: Twice Daily Filter
-on:
-  schedule:
-    - cron: '0 0,12 * * *'
-  workflow_dispatch:
 
-# This handles the Node 24 requirement
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 0,12 * * *' # Runs at 00:00 and 12:00 UTC
 
 jobs:
   run-filter:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-          
+
       - name: Install Dependencies
-        run: pip install requests feedparser
-        
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4
+
       - name: Run Filter
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
