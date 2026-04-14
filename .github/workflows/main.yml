@@ -3,7 +3,7 @@ name: Twice Daily Filter
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 0,12 * * *' # Runs every day at 12 AM and 12 PM UTC
+    - cron: '0 0,12 * * *' # Runs at 12 AM and 12 PM UTC
 
 jobs:
   run-filter:
