@@ -1,9 +1,14 @@
-name: Twice Daily Filter
+name: run-filter
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 0,12 * * *' # Runs at 12 AM and 12 PM UTC
+    # Adjust this cron schedule to match how often you want the filter to run
+    - cron: '0 * * * *' 
+  workflow_dispatch:
+
+env:
+  # This environment variable forces all Node 20 actions to run on Node 24
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   run-filter:
@@ -12,17 +17,20 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: '3.10' # Adjust if your script requires a different version
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install requests beautifulsoup4
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-      - name: Run Filter
+      - name: Run Feed Filter
         env:
-          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
-        run: python filter.py
+          # Ensure your secrets match the variables your Python script expects
+          DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }} 
+        run: |
+          # Replace 'main.py' if your specific entry script has a different name
+          python main.py
