@@ -2,8 +2,8 @@ name: Run X Feed Filter
 
 on:
   schedule:
-    - cron: '0 * * * *' # Runs every hour (adjust as needed)
-  workflow_dispatch:   # Allows you to run it manually
+    - cron: '0 * * * *'
+  workflow_dispatch:
 
 jobs:
   filter-job:
@@ -21,11 +21,12 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          # If you don't have a requirements.txt, add manual installs here:
-          # pip install requests tweepy
+          # This installs the missing 'requests' module
+          pip install requests 
+          # If you use other libraries like 'tweepy' or 'beautifulsoup4', add them below:
+          # pip install tweepy
 
       - name: Run Filter Script
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        run: python filter.py  # Changed from main.py to filter.py
+        run: python filter.py
