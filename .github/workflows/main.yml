@@ -2,7 +2,7 @@ name: Run X Feed Filter
 
 on:
   schedule:
-    - cron: '0 * * * *' # Runs at the start of every hour
+    - cron: '0 */2 * * *' # Runs every 2 hours
   workflow_dispatch:
 
 jobs:
