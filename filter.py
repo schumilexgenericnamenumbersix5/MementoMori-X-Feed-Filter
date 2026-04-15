@@ -16,9 +16,7 @@ def strip_html(html_content):
         script.decompose()
         
     text = soup.get_text(separator=" ")
-    # Removes the Twitter signature/footer (— Name @handle Date)
     text = re.sub(r'—.*?\(@.*?\).*$', '', text, flags=re.MULTILINE)
-    # Removes links from the text to be translated
     text = re.sub(r'http\S+', '', text)
     return " ".join(text.split())
 
@@ -31,11 +29,6 @@ def run_filter():
         "ラメント", "Lament", "cv", "song by", "予告", "Preview",
         "開催", "Held", "復刻", "Rerun", "運命ガチャ", "Chance of Fate",
         "ピックアップ", "Pick-up", "キャンペーン", "Campaign", "記念", "Anniversary"
-    ]
-
-    IGNORE_KEYWORDS = [
-        "ライブ", "Live", "アップデート", "Update", "メンテ", "Maintenance",
-        "プレゼント", "Present", "抽選", "Lottery", "リツイート", "Retweet", "フォロー", "Follow",
     ]
 
     if not webhook_url:
@@ -52,8 +45,8 @@ def run_filter():
             return
 
         now = datetime.now(timezone.utc)
-        # Set to 70 minutes to ensure coverage between hourly runs
-        time_threshold = now - timedelta(minutes=70)
+        # Updated to 130 minutes to cover your 125-min check with a small safety buffer
+        time_threshold = now - timedelta(minutes=130)
 
         for item in reversed(items):
             pub_date_str = item.find('pubDate').text if item.find('pubDate') else None
@@ -66,13 +59,9 @@ def run_filter():
             raw_description = item.find('description').text if item.find('description') else ""
             link = item.find('link').text if item.find('link') else ""
 
-            if title.startswith("RT ") or "RT by @" in title: continue
-
             clean_description = strip_html(raw_description)
             full_content = (title + " " + clean_description).lower()
             
-            if any(word.lower() in full_content for word in IGNORE_KEYWORDS): continue
-
             if any(word.lower() in full_content for word in WANT_KEYWORDS):
                 try:
                     translated_text = GoogleTranslator(source='auto', target='en').translate(clean_description)
@@ -86,7 +75,6 @@ def run_filter():
                 else:
                     clean_link = link
                 
-                # Format: Pure translation + the link
                 discord_message = f"{translated_text}\n\n{clean_link}"
                 
                 payload = {"username": "MementoMori Official", "content": discord_message}
