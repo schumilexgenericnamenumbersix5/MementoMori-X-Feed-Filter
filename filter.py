@@ -16,7 +16,9 @@ def strip_html(html_content):
         script.decompose()
         
     text = soup.get_text(separator=" ")
+    # Removes the Twitter signature/footer (— Name @handle Date)
     text = re.sub(r'—.*?\(@.*?\).*$', '', text, flags=re.MULTILINE)
+    # Removes links from the text to be translated
     text = re.sub(r'http\S+', '', text)
     return " ".join(text.split())
 
@@ -27,7 +29,7 @@ def run_filter():
     WANT_KEYWORDS = [
         "新キャラ", "New Character", "登場", "Appears", "実装", "Released",
         "ラメント", "Lament", "cv", "song by", "予告", "Preview",
-        "開催", "Held", "復刻", "Rerun", "運命ガチャ", "Chance of Fate",
+        "開催", "Held", "復刻", "Rerun", "Returning", "運命ガチャ", "Chance of Fate",
         "ピックアップ", "Pick-up", "キャンペーン", "Campaign", "記念", "Anniversary"
     ]
 
@@ -41,10 +43,10 @@ def run_filter():
         items = soup.find_all('item')
 
         if not items:
-            print("No items found.")
             return
 
         now = datetime.now(timezone.utc)
+        # Set to exactly 125 minutes
         time_threshold = now - timedelta(minutes=125)
 
         for item in reversed(items):
@@ -67,16 +69,17 @@ def run_filter():
                 except Exception:
                     translated_text = clean_description
 
-                if "x.com" in link:
-                    clean_link = link.replace("x.com", "vxtwitter.com")
-                elif "twitter.com" in link:
-                    clean_link = link.replace("twitter.com", "vxtwitter.com")
-                else:
-                    clean_link = link
+                # Remove hashtags from the final output
+                translated_text = re.sub(r'#\w+', '', translated_text).strip()
+                # Clean up any double spaces left behind by removing hashtags
+                translated_text = re.sub(r' +', ' ', translated_text)
+
+                clean_link = link.replace("x.com", "vxtwitter.com").replace("twitter.com", "vxtwitter.com")
                 
-                discord_message = f"{translated_text}\n\n{clean_link}"
-                
-                payload = {"username": "MementoMori Official", "content": discord_message}
+                payload = {
+                    "username": "MementoMori Official",
+                    "content": f"{translated_text}\n\n{clean_link}"
+                }
                 requests.post(webhook_url, json=payload)
 
     except Exception as e:
