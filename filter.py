@@ -45,7 +45,7 @@ def run_filter():
             return
 
         now = datetime.now(timezone.utc)
-        time_threshold = now - timedelta(minutes=1250)
+        time_threshold = now - timedelta(minutes=125)
 
         for item in reversed(items):
             pub_date_str = item.find('pubDate').text if item.find('pubDate') else None
