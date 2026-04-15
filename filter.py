@@ -18,8 +18,6 @@ def strip_html(html_content):
     text = soup.get_text(separator=" ")
     # Removes the Twitter signature/footer (— Name @handle Date)
     text = re.sub(r'—.*?\(@.*?\).*$', '', text, flags=re.MULTILINE)
-    # Removes links from the text to be translated
-    text = re.sub(r'http\S+', '', text)
     return " ".join(text.split())
 
 def run_filter():
@@ -46,7 +44,7 @@ def run_filter():
             return
 
         now = datetime.now(timezone.utc)
-        # Set to exactly 125 minutes
+        # Set to exactly 125 minutes as requested
         time_threshold = now - timedelta(minutes=125)
 
         for item in reversed(items):
@@ -60,6 +58,7 @@ def run_filter():
             raw_description = item.find('description').text if item.find('description') else ""
             link = item.find('link').text if item.find('link') else ""
 
+            # Check logic
             clean_description = strip_html(raw_description)
             full_content = (title + " " + clean_description).lower()
             
@@ -69,11 +68,12 @@ def run_filter():
                 except Exception:
                     translated_text = clean_description
 
-                # Remove hashtags from the final output
-                translated_text = re.sub(r'#\w+', '', translated_text).strip()
-                # Clean up any double spaces left behind by removing hashtags
-                translated_text = re.sub(r' +', ' ', translated_text)
+                # Remove hashtags
+                translated_text = re.sub(r'#\w+', '', translated_text)
+                # Remove extra whitespace
+                translated_text = re.sub(r'\s+', ' ', translated_text).strip()
 
+                # Replace standard Twitter links with vxtwitter for better Discord embeds
                 clean_link = link.replace("x.com", "vxtwitter.com").replace("twitter.com", "vxtwitter.com")
                 
                 payload = {
