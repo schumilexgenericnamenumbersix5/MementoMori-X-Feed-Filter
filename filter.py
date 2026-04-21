@@ -25,10 +25,6 @@ def run_filter():
         "ライブ", "Live",
         "アップデート", "Update",
         "メンテ", "Maintenance",
-        "プレゼント", "Present",
-        "抽選", "Lottery",
-        "リツイート", "Retweet",
-        "フォロー", "Follow"
     ]
 
     if not webhook_url:
