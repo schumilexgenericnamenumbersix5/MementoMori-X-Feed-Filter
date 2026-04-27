@@ -7,14 +7,16 @@ from email.utils import parsedate_to_datetime
 
 def clean_text(text):
     if not text: return ""
+    # Strip CDATA and extra whitespace
     text = re.sub(r'<!\[CDATA\[(.*?)\]\]>', r'\1', text, flags=re.DOTALL)
     return text.strip()
 
 def strip_html(html_content):
     if not html_content: return ""
     soup = BeautifulSoup(html_content, "html.parser")
-    for script in soup(["script", "style"]):
-        script.decompose()
+    # Remove script/style but also remove hidden links that might contain "Update" or "Live"
+    for tag in soup(["script", "style", "a"]):
+        tag.decompose()
     text = soup.get_text(separator=" ")
     return " ".join(text.split())
 
@@ -23,66 +25,71 @@ def run_filter():
     webhook_url = os.getenv("DISCORD_WEBHOOK")
     
     # Negative filters
-    IGNORE_KEYWORDS = [
-        "アップデート", "Update",
-        "メンテ", "Maintenance",
-    ]
+    IGNORE_KEYWORDS = ["アップデート", "Update", "メンテ", "Maintenance"]
 
     if not webhook_url:
         print("Error: Missing DISCORD_WEBHOOK.")
         return
 
     try:
-        print(f"Fetching RSS: {rss_url}")
+        print(f"--- Starting Fetch ---")
         response = requests.get(rss_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
         response.raise_for_status()
         
+        # Use 'xml' parser specifically
         soup = BeautifulSoup(response.content, 'xml')
         items = soup.find_all('item')
 
         if not items:
-            print("No items found in feed.")
+            print("No <item> tags found. Check if the RSS URL is still valid.")
             return
 
         now = datetime.now(timezone.utc)
-        # Increased window to 24 hours for testing; change back to 125 if needed
         time_threshold = now - timedelta(minutes=625)
-        
-        print(f"Filtering for posts after: {time_threshold}")
+        print(f"Threshold: {time_threshold} | Now: {now}")
+
+        found_in_window = 0
 
         for item in reversed(items):
-            pub_date_str = item.find('pubDate').text if item.find('pubDate') else None
-            if not pub_date_str: continue
+            # Try to get the date
+            pub_date_tag = item.find('pubDate')
+            if not pub_date_tag:
+                continue
             
-            pub_date = parsedate_to_datetime(pub_date_str)
+            pub_date = parsedate_to_datetime(pub_date_tag.text)
             
-            # 1. TIME CHECK
+            # Skip if older than threshold
             if pub_date < time_threshold:
                 continue
-
+            
+            found_in_window += 1
+            
+            # Get content
             title = clean_text(item.find('title').text if item.find('title') else "")
-            raw_description = item.find('description').text if item.find('description') else ""
+            # Some RSS feeds use <content:encoded> instead of description
+            desc_tag = item.find('description') or item.find('encoded')
+            description = strip_html(desc_tag.text if desc_tag else "")
             link = item.find('link').text if item.find('link') else ""
 
-            clean_description = strip_html(raw_description)
-            # Combine everything for searching
-            full_content = f"{title} {clean_description}"
-            
-            # 2. KEYWORD CHECK
-            # We check lowercase for English but keep original for Japanese
+            full_content = f"{title} {description}"
             content_lower = full_content.lower()
+
+            print(f"Checking Item: {title[:50]}...") # Debug log
+
+            # Keyword Check
             skip = False
             for word in IGNORE_KEYWORDS:
                 if word.lower() in content_lower:
-                    print(f"SKIPPED (Keyword '{word}'): {title[:30]}...")
+                    print(f"   >> SKIPPED: Found keyword '{word}'")
                     skip = True
                     break
             
             if skip: continue
 
-            # 3. SEND TO DISCORD
+            # Format Link
             clean_link = link.replace("x.com", "vxtwitter.com").replace("twitter.com", "vxtwitter.com")
             
+            # Post to Discord
             payload = {
                 "username": "MementoMori Official",
                 "content": clean_link
@@ -90,9 +97,12 @@ def run_filter():
             
             resp = requests.post(webhook_url, json=payload)
             if resp.status_code in [200, 204]:
-                print(f"SUCCESSFULLY POSTED: {clean_link}")
+                print(f"   >> SUCCESS: {clean_link}")
             else:
-                print(f"POST FAILED ({resp.status_code}): {resp.text}")
+                print(f"   >> WEBHOOK ERROR ({resp.status_code}): {resp.text}")
+
+        if found_in_window == 0:
+            print("No items found within the 625-minute window.")
 
     except Exception as e:
         print(f"Critical Error: {e}")
