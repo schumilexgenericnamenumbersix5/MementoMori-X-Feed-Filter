@@ -14,14 +14,15 @@ def clean_text(text):
 def strip_html(html_content):
     if not html_content: return ""
     soup = BeautifulSoup(html_content, "html.parser")
-    # Remove script/style but also remove hidden links that might contain "Update" or "Live"
+    # Remove script/style and links (which often contain "Update" or "Live")
     for tag in soup(["script", "style", "a"]):
         tag.decompose()
     text = soup.get_text(separator=" ")
     return " ".join(text.split())
 
 def run_filter():
-    rss_url = "https://rss.app/feeds/gNSWbxS89cf9JqaP.xml"
+    # UPDATED TO NITTER RSS
+    rss_url = "https://nitter.net/mementomori_boi/rss"
     webhook_url = os.getenv("DISCORD_WEBHOOK")
     
     # Negative filters
@@ -32,64 +33,57 @@ def run_filter():
         return
 
     try:
-        print(f"--- Starting Fetch ---")
+        print(f"--- Fetching from Nitter ---")
         response = requests.get(rss_url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
         response.raise_for_status()
         
-        # Use 'xml' parser specifically
         soup = BeautifulSoup(response.content, 'xml')
         items = soup.find_all('item')
 
         if not items:
-            print("No <item> tags found. Check if the RSS URL is still valid.")
+            print("No items found. Nitter instance might be rate-limited. Try a different instance if this persists.")
             return
 
         now = datetime.now(timezone.utc)
+        # Using your specified window
         time_threshold = now - timedelta(minutes=625)
-        print(f"Threshold: {time_threshold} | Now: {now}")
+        print(f"Checking for posts after: {time_threshold}")
 
-        found_in_window = 0
+        found_count = 0
 
         for item in reversed(items):
-            # Try to get the date
             pub_date_tag = item.find('pubDate')
-            if not pub_date_tag:
-                continue
+            if not pub_date_tag: continue
             
             pub_date = parsedate_to_datetime(pub_date_tag.text)
             
-            # Skip if older than threshold
             if pub_date < time_threshold:
                 continue
             
-            found_in_window += 1
-            
-            # Get content
+            # Content parsing
             title = clean_text(item.find('title').text if item.find('title') else "")
-            # Some RSS feeds use <content:encoded> instead of description
-            desc_tag = item.find('description') or item.find('encoded')
-            description = strip_html(desc_tag.text if desc_tag else "")
+            description = strip_html(item.find('description').text if item.find('description') else "")
             link = item.find('link').text if item.find('link') else ""
 
+            # Nitter often puts the full tweet in the description
             full_content = f"{title} {description}"
             content_lower = full_content.lower()
 
-            print(f"Checking Item: {title[:50]}...") # Debug log
-
-            # Keyword Check
+            # Filter Check
             skip = False
             for word in IGNORE_KEYWORDS:
                 if word.lower() in content_lower:
-                    print(f"   >> SKIPPED: Found keyword '{word}'")
+                    print(f"SKIPPED: Found '{word}' in tweet.")
                     skip = True
                     break
             
             if skip: continue
 
-            # Format Link
-            clean_link = link.replace("x.com", "vxtwitter.com").replace("twitter.com", "vxtwitter.com")
+            # Convert to vxtwitter for Discord
+            clean_link = link.replace("nitter.net", "vxtwitter.com")
+            # Handle cases where nitter link is a bit different
+            clean_link = re.sub(r'https?://[^/]+', 'https://vxtwitter.com', clean_link)
             
-            # Post to Discord
             payload = {
                 "username": "MementoMori Official",
                 "content": clean_link
@@ -97,12 +91,13 @@ def run_filter():
             
             resp = requests.post(webhook_url, json=payload)
             if resp.status_code in [200, 204]:
-                print(f"   >> SUCCESS: {clean_link}")
+                print(f"SUCCESS: {clean_link}")
+                found_count += 1
             else:
-                print(f"   >> WEBHOOK ERROR ({resp.status_code}): {resp.text}")
+                print(f"FAILED: {resp.status_code}")
 
-        if found_in_window == 0:
-            print("No items found within the 625-minute window.")
+        if found_count == 0:
+            print("No new tweets matching criteria found.")
 
     except Exception as e:
         print(f"Critical Error: {e}")
