@@ -42,7 +42,7 @@ def run_filter():
         # 125-minute window
         time_threshold = now - (datetime.now(timezone.utc) - datetime.now(timezone.utc)) # Placeholder logic fix below
         import datetime as dt
-        time_threshold = now - dt.timedelta(minutes=125)
+        time_threshold = now - dt.timedelta(minutes=425)
 
         for item in reversed(items):
             pub_date_str = item.find('pubDate').text if item.find('pubDate') else None
