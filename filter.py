@@ -22,7 +22,6 @@ def run_filter():
     
     # Negative filters: If any of these are found, skip the post
     IGNORE_KEYWORDS = [
-        "ライブ", "Live",
         "アップデート", "Update",
         "メンテ", "Maintenance",
     ]
